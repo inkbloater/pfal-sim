@@ -1,54 +1,50 @@
-"""
-Minimal CO2 physics for PFAL room (box model)
-Simulates CO2 concentration over 35 days and saves results to a CSV file in the project root.
-"""
-import csv
-from datetime import datetime, timedelta
 
+"""
+Minimal CO2 physics for PFAL simulation
+Models CO2 concentration dynamics in a closed room with injection, uptake, and leaks.
+"""
+
+from dataclasses import dataclass
+import math
+
+@dataclass
 class CO2Box:
-	def __init__(self, CO2_ppm=800.0, V_air=100.0):
-		self.CO2_ppm = CO2_ppm  # initial CO2 concentration (ppm)
-		self.V_air = V_air      # room air volume (m3)
-		self.CO2_mol = self.CO2_ppm * 1e-6 * 44.6 * self.V_air  # mol (approx)
+	CO2_ppm: float      # Current CO2 concentration (ppm)
+	V_room: float = 100.0  # Room volume (m3)
 
-	def update(self, CO2_inj=0.0, canopy_uptake=0.0, leaks=0.0, dt=60.0):
+	def update(self,
+			   CO2_inj: float,      # CO2 injection rate (mg/s)
+			   PPFD: float,         # Canopy PPFD (μmol/m2/s)
+			   canopy_area: float,  # m2
+			   leaks: float,        # CO2 loss rate (mg/s)
+			   dt: float = 60.0):   # timestep (s)
 		"""
-		CO2_inj: mol/s injected
-		canopy_uptake: mol/s consumed by plants
-		leaks: mol/s lost to leaks
-		dt: timestep in seconds
+		Advance CO2 concentration by one timestep.
+		- CO2_inj: injection rate (mg/s)
+		- PPFD: canopy PPFD (μmol/m2/s)
+		- canopy_area: m2
+		- leaks: loss rate (mg/s)
+		- dt: timestep (s)
 		"""
-		dCO2 = (CO2_inj - canopy_uptake - leaks) * dt
-		self.CO2_mol += dCO2
-		# Convert back to ppm for output
-		self.CO2_ppm = (self.CO2_mol / (44.6 * self.V_air)) * 1e6
-		return self.CO2_ppm
+		# Michaelis-Menten-like canopy uptake (μmol/s)
+		# Parameters: max uptake rate and half-sat PPFD
+		Vmax = 0.8 * canopy_area  # μmol CO2/s at saturating light (tunable)
+		Km = 200.0                # μmol/m2/s (half-sat PPFD)
+		uptake_umol_s = Vmax * PPFD / (Km + PPFD)
+		# Convert uptake to mg/s (1 μmol CO2 = 44e-6 mg)
+		uptake_mg_s = uptake_umol_s * 44e-6
 
-if __name__ == "__main__":
-	# Simulation parameters
-	V_air = 100.0  # m3
-	co2 = CO2Box(CO2_ppm=800.0, V_air=V_air)
-	dt = 60.0  # 1 min
-	num_days = 35
-	steps = int((24*60*60*num_days) / dt)
-	start_time = datetime.now().replace(minute=0, second=0, microsecond=0)
-	csv_file = "co2_simulation_results.csv"
+		# Net CO2 change (mg/s)
+		dCO2_mg = (CO2_inj - uptake_mg_s - leaks) * dt
 
-	# Example: constant injection, uptake, and leak (can be replaced with more realistic logic)
-	CO2_inj = 0.01  # mol/s injected
-	leaks = 0.002   # mol/s lost
-	# Michaelis-Menten-like uptake: Vmax * PPFD/(K+PPFD), here we use a simple constant for demo
-	Vmax = 0.008    # mol/s
-	K = 300         # umol/m2/s (not used in this simple demo)
-	PPFD = 250      # umol/m2/s (not used in this simple demo)
-	canopy_uptake = Vmax  # constant for now
+		# Convert mg to ppm: 1 ppm = 1.96 mg/m3 for CO2 at 25C
+		mg_per_ppm = 1.96 * self.V_room
+		dCO2_ppm = dCO2_mg / mg_per_ppm
+		self.CO2_ppm += dCO2_ppm
+		self.CO2_ppm = max(self.CO2_ppm, 0.0)
 
-	with open(csv_file, "w", newline="") as f:
-		writer = csv.writer(f)
-		writer.writerow(["timestamp", "CO2_ppm"])
-		for step in range(steps):
-			ppm = co2.update(CO2_inj=CO2_inj, canopy_uptake=canopy_uptake, leaks=leaks, dt=dt)
-			timestamp = start_time + timedelta(seconds=step*dt)
-			writer.writerow([timestamp.strftime("%Y-%m-%d %H:%M:%S"), ppm])
-	print(f"CO2 simulation results saved to: {csv_file}")
+	def state(self):
+		return {
+			'CO2_ppm': self.CO2_ppm
+		}
 

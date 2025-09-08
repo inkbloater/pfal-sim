@@ -1,10 +1,4 @@
 
-import csv
-from datetime import datetime, timedelta
-
-
-
-
 """
 Minimal thermal and moisture physics for PFAL room (box model)
 Implements sensible and latent heat/moisture balances for air and solution.
@@ -14,7 +8,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 @dataclass
-
 class RoomBox:
 	# State variables
 	T_air: float  # Air temperature (C)
@@ -56,41 +49,6 @@ class RoomBox:
 		# Solution temperature (simple balance, can be expanded)
 		# For now, assume tracks air temp with some lag
 		self.T_nutr += 0.1 * (self.T_air - self.T_nutr)
-
-	def state(self):
-		return {
-			'T_air': self.T_air,
-			'RH': self.RH,
-			'T_nutr': self.T_nutr
-		}
-
-
-# Main block at the end
-if __name__ == "__main__":
-	room = RoomBox(T_air=20.0, RH=0.7, T_nutr=20.0)
-	T_out = 15.0
-	Q_led = 1000.0      # W
-	Q_people = 100.0    # W
-	Q_equip = 50.0      # W
-	Q_HVAC_sens = 800.0 # W
-	Q_HVAC_lat = 200.0  # W
-	E_canopy = 10.0     # g/s
-	E_solution = 2.0    # g/s
-	infiltration = 1.0  # g/s
-	dt = 60.0           # 1 min
-	num_days = 35
-	steps = int((24*60*60*num_days) / dt)
-	start_time = datetime.now().replace(minute=0, second=0, microsecond=0)
-	csv_file = "room_simulation_results.csv"
-	with open(csv_file, "w", newline="") as f:
-		writer = csv.writer(f)
-		writer.writerow(["timestamp", "T_air", "RH", "T_nutr"])
-		for step in range(steps):
-			room.update(Q_led, Q_people, Q_equip, Q_HVAC_sens, Q_HVAC_lat, T_out, E_canopy, E_solution, infiltration, dt)
-			timestamp = start_time + timedelta(seconds=step*dt)
-			s = room.state()
-			writer.writerow([timestamp.strftime("%Y-%m-%d %H:%M:%S"), s['T_air'], s['RH'], s['T_nutr']])
-	print(f"Room simulation results saved to: {csv_file}")
 
 	def state(self):
 		return {
