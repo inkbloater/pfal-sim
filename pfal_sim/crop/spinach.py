@@ -25,8 +25,12 @@ def f_DLI(DLI):
         return 1.0
 
 def f_T(T):
-    # Bell curve centered at T_OPT
-    return math.exp(-((T - T_OPT) ** 2) / (2 * T_WIDTH ** 2))
+    # Bell curve centered at T_OPT, robust to overflow/NaN
+    if not math.isfinite(T):
+        return 0.0
+    exponent = -((T - T_OPT) ** 2) / (2 * T_WIDTH ** 2)
+    exponent = max(exponent, -700)  # Prevent math.exp underflow
+    return math.exp(exponent)
 
 def f_VPD(VPD):
     # Flat comfort band, smooth dropoff outside
